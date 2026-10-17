@@ -24,3 +24,26 @@ export async function getConferenceRegistrations({
 
   return result;
 }
+
+export async function sendConferenceRegistrationEmail(registrationId, token) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/conference/registrations/${registrationId}/send-email`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    },
+  );
+
+  const result = await response.json();
+
+  if (!response.ok || !result.success) {
+    throw new Error(
+      result.message || "Failed to resend conference registration email",
+    );
+  }
+
+  return result;
+}

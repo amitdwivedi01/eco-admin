@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import Visitors from "./pages/Visitor";
 import ConferenceRegistrations from "./pages/ConferenceRegistrations";
+import { Toaster } from "react-hot-toast";
 
 function NotFound() {
   return <h1 className="text-xl font-semibold">Page not found</h1>;
@@ -30,6 +31,7 @@ export default function App() {
           </Route>
         </Route>
       </Routes>
+      <Toaster />
     </BrowserRouter>
   );
 }

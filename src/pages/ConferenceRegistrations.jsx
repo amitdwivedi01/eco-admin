@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Eye,
   X,
   Building2,
   Mail,
@@ -20,7 +19,12 @@ import {
   QrCode,
 } from "lucide-react";
 import StatCard from "../components/StatCard";
-import { getConferenceRegistrations } from "../services/ConferenceRegistrations";
+import {
+  getConferenceRegistrations,
+  sendConferenceRegistrationEmail,
+} from "../services/ConferenceRegistrations";
+
+import toast from "react-hot-toast";
 
 const PAGE_SIZE = 10;
 
@@ -330,6 +334,73 @@ function RegistrationDetails({ registration, onClose }) {
   );
 }
 
+function SendEmailConfirmation({ registration, sending, onCancel, onConfirm }) {
+  if (!registration) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !sending) {
+          onCancel();
+        }
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="send-email-title"
+        className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl"
+      >
+        <h2
+          id="send-email-title"
+          className="mt-4 text-lg font-semibold text-slate-900"
+        >
+          Send confirmation email?
+        </h2>
+
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          Are you sure you want to send the conference registration confirmation
+          email to this contact?
+        </p>
+
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs text-slate-500">Contact person</p>
+          <p className="mt-0.5 text-sm font-medium text-slate-900">
+            {registration.contactPersonName || "—"}
+          </p>
+
+          <p className="mt-3 text-xs text-slate-500">Recipient email</p>
+          <p className="mt-0.5 break-all text-sm font-medium text-slate-800">
+            {registration.email || "No email address available"}
+          </p>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={sending}
+            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={sending || !registration.email}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Mail size={15} />
+            {sending ? "Sending..." : "Confirm & Send"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function ConferenceRegistrations() {
   const [registrations, setRegistrations] = useState([]);
   const [pagination, setPagination] = useState({
@@ -347,6 +418,9 @@ export default function ConferenceRegistrations() {
   const [selectedRegistration, setSelectedRegistration] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [sendingRegistrationId, setSendingRegistrationId] = useState(null);
+  const [emailConfirmationRegistration, setEmailConfirmationRegistration] =
+    useState(null);
 
   const loadRegistrations = useCallback(async (page = 1) => {
     setLoading(true);
@@ -427,6 +501,49 @@ export default function ConferenceRegistrations() {
     setOptionFilter("all");
   };
 
+  const handleSendEmail = (event, registration) => {
+    event.stopPropagation();
+
+    if (sendingRegistrationId !== null) return;
+
+    if (!registration.email) {
+      toast.error("This registration does not have an email address.");
+      return;
+    }
+
+    setEmailConfirmationRegistration(registration);
+  };
+
+  const confirmSendEmail = async () => {
+    const registration = emailConfirmationRegistration;
+
+    if (!registration || sendingRegistrationId !== null) return;
+
+    try {
+      setSendingRegistrationId(registration._id);
+
+      const result = await sendConferenceRegistrationEmail(registration._id);
+
+      setRegistrations((current) =>
+        current.map((item) =>
+          item._id === registration._id
+            ? { ...item, confirmationEmailSent: true }
+            : item,
+        ),
+      );
+
+      setEmailConfirmationRegistration(null);
+
+      toast.success(
+        result.message ||
+          `Registration email sent successfully to ${registration.email}`,
+      );
+    } catch (error) {
+      toast.error(error.message || "Failed to send registration email");
+    } finally {
+      setSendingRegistrationId(null);
+    }
+  };
   return (
     <main className="min-h-screen bg-slate-50/80 px-4 py-5 text-left sm:px-2">
       <div className="mx-auto  space-y-4">
@@ -575,7 +692,7 @@ export default function ConferenceRegistrations() {
                   <th className="px-4 py-2.5 font-semibold">Payment</th>
                   <th className="px-4 py-2.5 font-semibold">Delivery</th>
                   <th className="px-4 py-2.5 text-right font-semibold">
-                    <span className="sr-only">Action</span>
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -621,9 +738,18 @@ export default function ConferenceRegistrations() {
                       className="cursor-pointer hover:bg-slate-50/80"
                     >
                       <td className="px-4 py-2.5">
-                        <p className="font-medium capitalize text-slate-900">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedRegistration(registration);
+                          }}
+                          className="text-left font-medium text-slate-900 hover:text-blue-700 hover:underline"
+                          title="View registration details"
+                        >
                           {registration.contactPersonName || "—"}
-                        </p>
+                        </button>
+
                         <p className="text-xs text-slate-400">
                           {registration.organisation || "—"}
                         </p>
@@ -658,8 +784,8 @@ export default function ConferenceRegistrations() {
                         <StatusBadge status={registration.paymentStatus} />
                       </td>
 
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1.5">
+                      <td className="px-4 py-2.5 flex ">
+                        <div className="flex flex-col items-center gap-1.5">
                           <DeliveryChip
                             done={registration.qrGenerated}
                             icon={QrCode}
@@ -678,18 +804,22 @@ export default function ConferenceRegistrations() {
                       </td>
 
                       <td className="px-4 py-2.5 text-right">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedRegistration(registration);
-                          }}
-                          aria-label="View registration details"
-                          title="View details"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                        >
-                          <Eye size={15} />
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={(event) =>
+                              handleSendEmail(event, registration)
+                            }
+                            disabled={sendingRegistrationId !== null}
+                            title={`Send registration email to ${registration.email}`}
+                            aria-label={`Send registration email to ${registration.email}`}
+                            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 text-xs font-medium text-blue-700 hover:border-blue-300 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {sendingRegistrationId === registration._id
+                              ? "Sending..."
+                              : "Send Email"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -744,6 +874,14 @@ export default function ConferenceRegistrations() {
         <RegistrationDetails
           registration={selectedRegistration}
           onClose={() => setSelectedRegistration(null)}
+        />
+      )}
+
+      {emailConfirmationRegistration && (
+        <SendEmailConfirmation
+          registration={emailConfirmationRegistration}
+          onCancel={() => setEmailConfirmationRegistration(null)}
+          onConfirm={confirmSendEmail}
         />
       )}
     </main>
